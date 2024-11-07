@@ -1,19 +1,19 @@
 import traceback
 import sqlalchemy as db
 import csv
+import credentials as c
 
 # GLOBALS
-BONDS_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/Bonds-data.csv'
-COMMODITIES_PATH = '/data/Commodities_data.csv'
-STOCKS_PATH = '/data/Stocks_data.csv'
-INDEXES_PATH = '/data/Indexes_data.csv'
+BONDS_PATH = 'raw_data/Bonds_data.csv'
+COMMODITIES_PATH = 'raw_data/Commodities_data.csv'
+STOCKS_PATH = 'raw_data/Stocks_data.csv'
+INDEXES_PATH = 'raw_data/Indexes_data.csv'
 # Replace username, password, host, dbname with credentials
-DATABASE_URI = 'mysql+pymysql://root:FIREWOOD-sack-wino@localhost:3306/ats_dw'
+DATABASE_URI = 'mysql+pymysql://{c.username}:{c.password}@{c.host}/{c.dbname}'
 
 # Initialize connection to db
 engine = db.create_engine(DATABASE_URI, echo=True)
 
-print(engine)
 
 def load_bonds(connection, bonds_data_file=BONDS_PATH):
     """
@@ -25,26 +25,15 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
         csv_loader = csv.DictReader(bonds_data)
         for row in csv_loader:
             try:
-                # Check if date exists in database
-                # TODO: We need to insert time and fix syntax. make function for dim_time insert?
-                time_check = db.text("""SELECT * FROM Dim_Time WHERE date = row.date""")
-                if time_check.length != 0:
-                    time_insert = db.text("""INSERT INTO DIM_TIME (date) VALUES (:row.date)""")
-                    time_check = db.text("""SELECT * FROM Dim_Time ORDER BY time_id DESC""")
-
-                time_id = time_check.time_id
-
-                bond_insert = db.text("""
+                insert_query = db.text("""
                     INSERT INTO Fact_Bond_Prices (bond_id, one_month, two_month, three_month, six_month, one_year, 
                     two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
-                    VALUES (:bond_id, :1_month, :2_month, :3_month, :6_month, :1_year, :2_year, 
-                    :3_year, :5_year, :10_year, :20_year, :30_year)
+                    VALUES (:bond_id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
+                    :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
                 """)
-                connection.execute(bond_insert)
             except Exception as e:
                 print("Error when inserting bonds:", e)
                 traceback.print_exc()
-        connection.commit()
 
 
 def load_commodities(connection, commodity_data_raw):
@@ -72,11 +61,3 @@ def load_indexes(connection, index_data_raw):
     with open(INDEXES_PATH, "r") as index_data:
         insert_query = db.text("""INSERT INTO Fact_Index_Prices VALUES ()""")
     return None
-
-if __name__ == "__main__":
-    try:
-        with engine.connect() as connection:
-            load_bonds(connection)
-    except Exception as e:
-        print("Error in database connection or data loading:", e)
-        traceback.print_exc()
