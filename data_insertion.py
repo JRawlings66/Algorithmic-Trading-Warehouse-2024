@@ -1,6 +1,7 @@
 import traceback
 import sqlalchemy as db
 import csv
+import credentials as c
 
 # GLOBALS
 BONDS_PATH = 'raw_data/Bonds_data.csv'
@@ -8,7 +9,7 @@ COMMODITIES_PATH = 'raw_data/Commodities_data.csv'
 STOCKS_PATH = 'raw_data/Stocks_data.csv'
 INDEXES_PATH = 'raw_data/Indexes_data.csv'
 # Replace username, password, host, dbname with credentials
-DATABASE_URI = 'mysql+pymysql://username:password@host/dbname'
+DATABASE_URI = 'mysql+pymysql://{c.username}:{c.password}@{c.host}/{c.dbname}'
 
 # Initialize connection to db
 engine = db.create_engine(DATABASE_URI, echo=True)
