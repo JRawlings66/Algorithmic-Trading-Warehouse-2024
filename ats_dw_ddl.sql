@@ -1,5 +1,5 @@
 CREATE TABLE `Dim_Time` (
-  `time_id ` int,
+  `time_id ` int auto_increment,
   `date` date,
   `day_of_week` varchar(10,
   `month` varchar(10),
@@ -15,7 +15,7 @@ CREATE TABLE `Dim_bonds` (
 );
 
 CREATE TABLE `Fact_Bond_Prices` (
-  `fact_id` int,
+  `fact_id` int auto_increment,
   `time_id` int,
   `bond_id` bigint,
   `one_month` float,
@@ -52,7 +52,7 @@ CREATE TABLE `Dim_Commodites` (
 );
 
 CREATE TABLE `Fact_Commodity_Prices` (
-  `fact_id` int,
+  `fact_id` int auto_increment,
   `time_id` int,
   `commodity_id` bigint,
   `open` float,
@@ -71,7 +71,7 @@ CREATE TABLE `Fact_Commodity_Prices` (
 );
 
 CREATE TABLE `Fact_Index_Prices` (
-  `fact_id ` int,
+  `fact_id ` int auto_increment,
   `time_id` int,
   `index_id` bigint,
   `open` float,
@@ -124,7 +124,7 @@ CREATE TABLE `Dim_company_statements` (
 );
 
 CREATE TABLE `Fact_Stock_Prices` (
-  `fact_id` int,
+  `fact_id` int auto_increment,
   `time_id` int,
   `company_id` bigint,
   `open` float,
