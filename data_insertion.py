@@ -14,6 +14,34 @@ DATABASE_URI = 'mysql+pymysql://root:FIREWOOD-sack-wino@localhost:3306/ats_dw'
 
 # Initialize connection to db
 engine = db.create_engine(DATABASE_URI, echo=True)
+connection = engine.connect()
+
+#returns time_dim row_id
+def upsertTime(connection, csv_row):
+    if csv_row['date'] == None:
+        raise Exception("Row does not contain date data")
+    date = csv_row['date']
+    
+    initial_select_qs = db.text("""SELECT * FROM Dim_Time WHERE DATE = :date""")
+    res = connection.execute(initial_select_qs, {'date': date})
+    rows = res.fetchall()
+
+    if len(rows) == 0:
+        print('if triggered')
+        insert_qs = db.text("""INSERT INTO Dim_Time (date) VALUES (:date)""")
+        connection.execute(insert_qs, {'date': date})
+        select_most_recent_qs = db.text("""SELECT * FROM Dim_Time ORDER BY time_id DESC LIMIT 1""")
+        res = connection.execute(select_most_recent_qs)
+
+    rows = res.fetchall()
+
+    if len(rows) == 0:
+        raise Exception("Unable to Select dim_time id")
+    if len(rows) > 1:
+        raise Exception("Ambigious Row selection")
+
+    result = rows[0]
+    return result
 
 
 # returns time_dim row_id
@@ -68,6 +96,7 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
             traceback.print_exc()
 
 
+load_bonds(connection)
 def load_commodities(connection, commodity_data_raw):
     """
     TODO: ETL function for commodity data.

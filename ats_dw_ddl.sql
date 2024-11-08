@@ -1,11 +1,11 @@
 CREATE TABLE `Dim_Time` (
-  `time_id ` int auto_increment,
+  `time_id` int auto_increment,
   `date` date,
-  `day_of_week` varchar(10,
+  `day_of_week` varchar(10),
   `month` varchar(10),
   `quarter` varchar(10),
   `year` int,
-  PRIMARY KEY (`time_id `)
+  PRIMARY KEY (`time_id`)
 );
 
 CREATE TABLE `Dim_bonds` (
@@ -30,7 +30,7 @@ CREATE TABLE `Fact_Bond_Prices` (
   `twenty_year` float,
   `thirty_year` float,
   PRIMARY KEY (`fact_id`),
-  FOREIGN KEY (`time_id`) REFERENCES `Dim_Time`(`time_id `),
+  FOREIGN KEY (`time_id`) REFERENCES `Dim_Time`(`time_id`),
   FOREIGN KEY (`bond_id`) REFERENCES `Dim_bonds`(`bond_ID`)
 );
 
@@ -71,7 +71,7 @@ CREATE TABLE `Fact_Commodity_Prices` (
 );
 
 CREATE TABLE `Fact_Index_Prices` (
-  `fact_id ` int auto_increment,
+  `fact_id` int auto_increment,
   `time_id` int,
   `index_id` bigint,
   `open` float,
@@ -85,7 +85,7 @@ CREATE TABLE `Fact_Index_Prices` (
   `change` float,
   `vwap` float,
   `changeOverTime` float,
-  PRIMARY KEY (`fact_id `),
+  PRIMARY KEY (`fact_id`),
   FOREIGN KEY (`index_id`) REFERENCES `Dim_Indexes`(`index_ID`)
 );
 
