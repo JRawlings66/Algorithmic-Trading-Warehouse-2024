@@ -2,25 +2,22 @@ import traceback
 import sqlalchemy as db
 import csv
 import credentials as c
+import pandas as pd
 
 # GLOBALS
-BONDS_PATH = 'raw_data/Bonds_data.csv'
-COMMODITIES_PATH = 'raw_data/Commodities_data.csv'
-STOCKS_PATH = 'raw_data/Stocks_data.csv'
-INDEXES_PATH = 'raw_data/Indexes_data.csv'
+BONDS_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/Bonds-data.csv'
+COMMODITIES_PATH = 'data/Commodities_data.csv'
+STOCKS_PATH = 'data/Stocks_data.csv'
+INDEXES_PATH = 'data/Indexes_data.csv'
 # Replace username, password, host, dbname with credentials
-DATABASE_URI = 'mysql+pymysql://{c.username}:{c.password}@{c.host}/{c.dbname}'
+DATABASE_URI = 'mysql+pymysql://root:FIREWOOD-sack-wino@localhost:3306/ats_dw'
 
 # Initialize connection to db
 engine = db.create_engine(DATABASE_URI, echo=True)
 
 
 # returns time_dim row_id
-def upsertTime(connection, csv_row):
-    if csv_row.date == None:
-        raise Exception("Row does not contain date data")
-    date = csv_row.date
-
+def upsertTime(connection, date):
     initial_select_qs = db.text("""SELECT * FROM Dim_Time WHERE DATE = %s""".format(date))
     res = connection.execute(initial_select_qs)
 
@@ -35,8 +32,8 @@ def upsertTime(connection, csv_row):
     if res.length > 1:
         raise Exception("Ambigious Row selection")
 
-    result = res[0]
-    return result
+    time_id = res[0]
+    return time_id
 
 
 def load_bonds(connection, bonds_data_file=BONDS_PATH):
@@ -45,22 +42,30 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
     loads csv data and inserts into Fact_Bond_Prices
     TODO: Insertion process for 'Dim_Bonds'
     """
-    with open(bonds_data_file, "r") as bonds_data:
-        csv_loader = csv.DictReader(bonds_data)
-        for row in csv_loader:
-            try:
-                # Insert date into dim_date
-                upsertTime(connection, row)
-                insert_query = db.text("""
-                    INSERT INTO Fact_Bond_Prices (bond_id, one_month, two_month, three_month, six_month, one_year, 
-                    two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
-                    VALUES (:bond_id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
-                    :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
-                """)
-                connection.execute(insert_query, **row)
-            except Exception as e:
-                print("Error when inserting bonds:", e)
-                traceback.print_exc()
+    fields = ['id', 'treasuryName', 'bond_id', 'date', '1_month', '2_month', '3_month', '6_month', '1_year',
+                  '2_year', '3_year', '5_year', '7_year', '10_year', '20_year', '30_year']
+    data_frame = pd.read_csv(bonds_data_file, skipinitialspace=True, usecols=fields)
+    for index, row in data_frame.iterrows():
+        try:
+            # Convert row to a dictionary (this will map column names to values)
+            row_dict = row.to_dict()
+            print('row:', row_dict)
+            # Insert date into dim_date
+            # upsertTime(connection, row)
+            dim_insert = db.text("""
+                INSERT INTO Dim_Bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
+            """)
+            connection.execute(dim_insert, **row_dict)
+            fact_insert = db.text("""
+                INSERT INTO Fact_Bond_Prices (time_id, bond_id, one_month, two_month, three_month, six_month, one_year, 
+                two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
+                VALUES (:time_id, :bond_id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
+                :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
+            """)
+            connection.execute(fact_insert, time_id=1, bond_id=row_dict['bond_id'], **row_dict)
+        except Exception as e:
+            print("Error when inserting bonds:", e)
+            traceback.print_exc()
 
 
 def load_commodities(connection, commodity_data_raw):
