@@ -1,6 +1,9 @@
 import traceback
 import sqlalchemy as db
 import csv
+
+from pymysql import connect
+
 import credentials as c
 import pandas as pd
 
@@ -43,33 +46,13 @@ def upsertTime(connection, csv_row):
     result = rows[0]
     return result
 
-
-# returns time_dim row_id
-def upsertTime(connection, date):
-    initial_select_qs = db.text("""SELECT * FROM Dim_Time WHERE DATE = %s""".format(date))
-    res = connection.execute(initial_select_qs)
-
-    if res == None:
-        insert_qs = db.text("""INSERT INTO Dim_Time (date) VALUES (%s)""".format(date))
-        res = connection.execute(insert_qs)
-        select_most_recent_qs = db.text("""SELECT TOP 1 * FROM Dim_Time ORDER BY time_id DESC""")
-        res = connection.execute(select_most_recent_qs)
-
-    if res == None:
-        raise Exception("Unable to Select dim_time id")
-    if res.length > 1:
-        raise Exception("Ambigious Row selection")
-
-    time_id = res[0]
-    return time_id
-
-
 def load_bonds(connection, bonds_data_file=BONDS_PATH):
     """
     ETL function for treasury bond data.
     loads csv data and inserts into Fact_Bond_Prices
     TODO: Insertion process for 'Dim_Bonds'
     """
+    connection.rollback()
     fields = ['id', 'treasuryName', 'bond_id', 'date', '1_month', '2_month', '3_month', '6_month', '1_year',
                   '2_year', '3_year', '5_year', '7_year', '10_year', '20_year', '30_year']
     data_frame = pd.read_csv(bonds_data_file, skipinitialspace=True, usecols=fields)
@@ -79,22 +62,23 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
             row_dict = row.to_dict()
             print('row:', row_dict)
             # Insert date into dim_date
-            # upsertTime(connection, row)
+            dim_time_id = upsertTime(connection, row)
             dim_insert = db.text("""
-                INSERT INTO Dim_Bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
+                INSERT INTO Dim_bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
             """)
-            connection.execute(dim_insert, **row_dict)
+            connection.execute(dim_insert, row_dict)
             fact_insert = db.text("""
                 INSERT INTO Fact_Bond_Prices (time_id, bond_id, one_month, two_month, three_month, six_month, one_year, 
                 two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
-                VALUES (:time_id, :bond_id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
+                VALUES (:time_id, :id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
                 :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
             """)
-            connection.execute(fact_insert, time_id=1, bond_id=row_dict['bond_id'], **row_dict)
+            insert_obj = row_dict.update({ "time_id": dim_time_id})
+            connection.execute(fact_insert, insert_obj)
         except Exception as e:
             print("Error when inserting bonds:", e)
             traceback.print_exc()
-
+    connection.commit()
 
 load_bonds(connection)
 def load_commodities(connection, commodity_data_raw):
