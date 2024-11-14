@@ -116,20 +116,66 @@ def load_stocks(connection, stock_data_raw):
                 traceback.print_exc()
 
 
-def load_indexes(connection, index_data_raw):
+def load_indexes(connection, indexes_data_file=INDEXES_PATH):
     """
-    TODO: ETL function for index data.
+    ETL function for index data.
+    Loads CSV data and inserts into Fact_Index_Prices
+    Maps fields from CSV format to database schema.
     """
-    with open(INDEXES_PATH, "r") as index_data:
-        csv_loader = csv.DictReader(index_data)
-        for row in csv_loader:
-            try:
-                insert_query = db.text("""INSERT INTO Fact_Index_Prices VALUES ()""")
-                connection.execute(insert_query, **row)
-            except Exception as e:
-                print("Error when inserting indexes:", e)
-                traceback.print_exc()
-
+    connection.rollback()
+    fields = ['id', 'indexName', 'symbol', 'index_id', 'date', 'price', 
+              'changePercentage', 'change', 'dayLow', 'dayHigh', 'yearHigh', 
+              'yearLow', 'mktCap', 'exchange', 'volume', 'volumeAvg', 
+              'open', 'prevClose']
+    
+    data_frame = pd.read_csv(indexes_data_file, skipinitialspace=True, usecols=fields)
+    
+    for index, row in data_frame.iterrows():
+        try:
+            # Convert row to a dictionary
+            row_dict = row.to_dict()
+            print('Processing row:', row_dict)
+            
+            # Insert date into dim_time and get time_id
+            dim_time_id = upsertTime(connection, row_dict)
+            
+            # Map CSV fields to database fields
+            db_row = {
+                'time_id': dim_time_id,
+                'index_id': row_dict['index_id'],
+                'open': row_dict['open'],
+                'high': row_dict['dayHigh'],
+                'low': row_dict['dayLow'],
+                'close': row_dict['price'],  # Using current price as close
+                'volume': row_dict['volume'],
+                'change_percent': row_dict['changePercentage'],
+                'adjClose': row_dict['price'],  # Using price as adjClose since we don't have it
+                'unadjustedVolume': row_dict['volume'],  # Using regular volume as we don't have unadjusted
+                'vwap': None,  # Can calculate if needed
+                'changeOverTime': None  # Can calculate if needed
+            }
+            
+            # Prepare fact table insertion
+            fact_insert = db.text("""
+                INSERT INTO Fact_Index_Prices (
+                    time_id, index_id, open, high, low, close,
+                    volume, change_percent, adjClose, unadjustedVolume,
+                    vwap, changeOverTime
+                ) VALUES (
+                    :time_id, :index_id, :open, :high, :low, :close,
+                    :volume, :change_percent, :adjClose, :unadjustedVolume,
+                    :vwap, :changeOverTime
+                )
+            """)
+            
+            # Execute the insertion
+            connection.execute(fact_insert, db_row)
+            
+        except Exception as e:
+            print("Error when inserting index data:", e)
+            traceback.print_exc()
+    
+    connection.commit()
 # Main exec
 if __name__ == "__main__":
     try:
