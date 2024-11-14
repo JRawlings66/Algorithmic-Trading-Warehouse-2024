@@ -50,7 +50,7 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
     """
     ETL function for treasury bond data.
     loads csv data and inserts into Fact_Bond_Prices
-    TODO: Insertion process for 'Dim_Bonds'
+    Also Inserts into 'Dim_Bonds' when needed
     """
     # Reset any existing transactions to start fresh
     connection.rollback()
