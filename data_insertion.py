@@ -92,7 +92,7 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
     # Reset any existing transactions to start fresh
     connection.rollback()
     # Define the fields we’re pulling from the CSV
-    fields = ['id', 'commodityName', 'commodity_id', 'date', 'price', 'change_percentage', 'volume']
+    fields = ['commodity_id', 'commodityName', 'symbol', 'date', 'price']
     data_frame = pd.read_csv(commodity_data_file, skipinitialspace=True, usecols=fields)
     for index, row in data_frame.iterrows():
         try:
@@ -108,16 +108,16 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
 
             if not result:
                 dim_insert = db.text("""
-                    INSERT INTO Dim_Commodities (commodity_id, commodity_name) 
-                    VALUES (:commodity_id, :commodityName)
+                    INSERT INTO Dim_Commodities (commodity_id, commodity_name, commodity_symbol) 
+                    VALUES (:commodity_id, :commodityName, :symbol)
                 """)
                 connection.execute(dim_insert, row_dict)
 
             # insert fact data
             # TODO: The CSV data we are using seems wrong. Waiting on Ajitesh to send current data files, then fix this
             fact_insert = db.text("""
-                INSERT INTO Fact_Commodity_Prices (time_id, commodity_id, price, change_percentage, volume) 
-                VALUES (:time_id, :commodity_id, :price, :change_percentage, :volume)
+                INSERT INTO Fact_Commodity_Prices (time_id, commodity_id, price) 
+                VALUES (:time_id, :commodity_id, :price)
             """)
             row_dict.update({"time_id", dim_time_id})
             connection.execute(fact_insert, row_dict)
