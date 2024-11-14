@@ -52,7 +52,9 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
     loads csv data and inserts into Fact_Bond_Prices
     TODO: Insertion process for 'Dim_Bonds'
     """
+    # Reset any existing transactions to start fresh
     connection.rollback()
+    # Define the fields we’re pulling from the CSV
     fields = ['id', 'treasuryName', 'bond_id', 'date', '1_month', '2_month', '3_month', '6_month', '1_year',
                   '2_year', '3_year', '5_year', '7_year', '10_year', '20_year', '30_year']
     data_frame = pd.read_csv(bonds_data_file, skipinitialspace=True, usecols=fields)
@@ -60,43 +62,69 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
         try:
             # Convert row to a dictionary (this will map column names to values)
             row_dict = row.to_dict()
-            print('row:', row_dict)
-            # Insert date into dim_date
+            # Insert date into dim_time
             dim_time_id = upsertTime(connection, row)
             dim_insert = db.text("""
                 INSERT INTO Dim_bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
             """)
             connection.execute(dim_insert, row_dict)
+            # Insert data into fact_bond_prices
             fact_insert = db.text("""
                 INSERT INTO Fact_Bond_Prices (time_id, bond_id, one_month, two_month, three_month, six_month, one_year, 
                 two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
                 VALUES (:time_id, :id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
                 :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
             """)
-            insert_obj = row_dict.update({ "time_id": dim_time_id})
-            connection.execute(fact_insert, insert_obj)
+            row_dict.update({ "time_id": dim_time_id})
+            connection.execute(fact_insert, row_dict)
         except Exception as e:
             print("Error when inserting bonds:", e)
             traceback.print_exc()
     connection.commit()
 
-load_bonds(connection)
-def load_commodities(connection, commodity_data_raw):
+# load_bonds(connection)
+def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
     """
-    TODO: ETL function for commodity data.
+    ETL function for commodity data.
+    Loads CSV data and inserts into 'Fact_Commodity_Prices'
+    Also populates Dim_Time and Dim_Commodities as needed
     """
-    with open(COMMODITIES_PATH, "r") as commodity_data:
-        csv_loader = csv.DictReader(commodity_data)
-        for row in csv_loader:
-            try:
-                insert_query = db.text("""
-                    INSERT INTO Fact_Commodity_Prices (commodity_id, price, change_percentage, 
-                    volume) VALUES (:commodity_id, :price, :change_percentage, :volume)
+    # Reset any existing transactions to start fresh
+    connection.rollback()
+    # Define the fields we’re pulling from the CSV
+    fields = ['id', 'commodityName', 'commodity_id', 'date', 'price', 'change_percentage', 'volume']
+    data_frame = pd.read_csv(commodity_data_file, skipinitialspace=True, usecols=fields)
+    for index, row in data_frame.iterrows():
+        try:
+            # Convert row to dict
+            row_dict = row.to_dict()
+            print('Processing row:', row_dict)
+            # Retrieve time_id
+            dim_time_id = upsertTime(connection, row)
+            # TODO: check if time exists in dim_time else insert it
+            # Insert commodity into dim_commodities (if doesnt exist)
+            select_query = db.text("SELECT commodity_id FROM Dim_Commodities WHERE commodity_id = :commodity_id")
+            result = connection.execute(select_query, {'commodity_id': row_dict['commodity_id']}).fetchone()
+
+            if not result:
+                dim_insert = db.text("""
+                    INSERT INTO Dim_Commodities (commodity_id, commodity_name) 
+                    VALUES (:commodity_id, :commodityName)
                 """)
-                connection.execute(insert_query, **row)
-            except Exception as e:
-                print("Error when inserting commodities:", e)
-                traceback.print_exc()
+                connection.execute(dim_insert, row_dict)
+
+            # insert fact data
+            # TODO: The CSV data we are using seems wrong. Waiting on Ajitesh to send current data files, then fix this
+            fact_insert = db.text("""
+                INSERT INTO Fact_Commodity_Prices (time_id, commodity_id, price, change_percentage, volume) 
+                VALUES (:time_id, :commodity_id, :price, :change_percentage, :volume)
+            """)
+            row_dict.update({"time_id", dim_time_id})
+            connection.execute(fact_insert, row_dict)
+        except Exception as e:
+            print("Error when inserting commodities:", e)
+            traceback.print_exc()
+    connection.commit()
 
 
 def load_stocks(connection, stock_data_raw):
@@ -136,7 +164,7 @@ if __name__ == "__main__":
         # Establish connection to db
         with engine.connect() as connection:
             load_bonds(connection)
-            # load_commodities(connection)
+            load_commodities(connection)
             # load_stocks(connection)
             # load_indexes(connection)
     except Exception as e:
