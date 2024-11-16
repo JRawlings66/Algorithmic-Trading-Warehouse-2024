@@ -63,7 +63,7 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
             # Convert row to a dictionary (this will map column names to values)
             row_dict = row.to_dict()
             # Insert date into dim_time
-            dim_time_id = upsertTime(connection, row)
+            dim_time_id = upsertTime(connection, row_dict)
             dim_insert = db.text("""
                 INSERT INTO Dim_bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
             """)
@@ -100,8 +100,7 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
             row_dict = row.to_dict()
             print('Processing row:', row_dict)
             # Retrieve time_id
-            dim_time_id = upsertTime(connection, row)
-            # TODO: check if time exists in dim_time else insert it
+            dim_time_id = upsertTime(connection, row_dict)
             # Insert commodity into dim_commodities (if doesnt exist)
             select_query = db.text("SELECT commodity_id FROM Dim_Commodities WHERE commodity_id = :commodity_id")
             result = connection.execute(select_query, {'commodity_id': row_dict['commodity_id']}).fetchone()
@@ -127,21 +126,65 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
     connection.commit()
 
 
-def load_stocks(connection, stock_data_raw):
+def load_stocks(connection, stock_data_file=STOCKS_PATH):
     """
-    TODO: ETL function for stock data.
+    ETL function for Stock data.
+    Loads CSV data and inserts into 'Fact_Stock_Prices'
+    Also populates Dim_Time and Dim_company_statements as needed
     """
-    with open(STOCKS_PATH, "r") as stock_data:
-        csv_loader = csv.DictReader(stock_data)
-        for row in csv_loader:
-            try:
-                insert_query = db.text("""
-                    INSERT INTO Fact_Stock_Prices (company_id, open, high, low, close, adj_close, volume) 
-                    VALUES (:company_id, :open, :high, :low, :close, :adj_close, :volume)""")
-                connection.execute(insert_query, **row)
-            except Exception as e:
-                print("Error when inserting stocks:", e)
-                traceback.print_exc()
+
+    connection.rollback()
+
+    fields = ['id', 'companyName', 'symbol', 'company_id', 'date', 'open', 'high', 'low', 'close', 'adjClose', 'volume', 'unadjustedVolume', 'change', 'changePercentage', 'vwap', 'changeOverTime']
+
+    data_frame = pd.read_csv(stock_data_file, skipinitialspace=True, usecols=fields)
+    
+    for index, row in data_frame.iterrows():
+        try:
+            row_dict = row.to_dict()
+            rid = row_dict.id
+            print('Processing row:', row_dict)
+
+            dim_time_id = upsertTime(connection, row_dict)
+            dim_row_exists_qs  = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
+            res = connection.execute(dim_row_exists_qs, {'id': rid})
+            rows = res.fetchall()
+            if len(rows) > 1:
+                raise Exception('Ambigious row selection in company statements dimension table')
+            if len(rows) == 0:
+                raise Exception('No corrisponding row in the company statement dimension table')
+
+            # Transform CSV fields to database fields
+            db_row = {
+                'time_id': dim_time_id,
+                'company_id': rid,
+                'open': row_dict['open'],
+                'high': row_dict['dayHigh'],
+                'low': row_dict['dayLow'],
+                'close': row_dict['price'],  # Using current price as close
+                'volume': row_dict['volume'],
+                'change_percent': row_dict['changePercentage'],
+                'adjClose': row_dict['price'],  # Using price as adjClose since we don't have it
+                'unadjustedVolume': row_dict['volume'],  # Using regular volume as we don't have unadjusted
+                'vwap': None,
+                'changeOverTime': None 
+            }
+
+            # Prepare fact table insertion
+            fact_insert = db.text("""
+                INSERT INTO Fact_Stock_Prices (time_id, company_id, open, high, low, close, adj_close, volume, change_percent, vwap) VALUES (
+                    :time_id, :company_id, :open, :high, :low, :close,
+                    :adjClose, :volume, :change_percent, :vwap
+                )
+            """)
+            
+            # Execute the insertion
+            connection.execute(fact_insert, db_row)
+        except Exception as e:
+            print("Error when inserting stocks:", e)
+            traceback.print_exc()
+
+    connection.commit()
 
 
 def load_indexes(connection, indexes_data_file=INDEXES_PATH):
@@ -164,7 +207,6 @@ def load_indexes(connection, indexes_data_file=INDEXES_PATH):
             row_dict = row.to_dict()
             print('Processing row:', row_dict)
             
-            # Insert date into dim_time and get time_id
             dim_time_id = upsertTime(connection, row_dict)
             
             # Map CSV fields to database fields
