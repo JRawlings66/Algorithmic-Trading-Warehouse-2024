@@ -36,18 +36,15 @@ CREATE TABLE `Fact_Bond_Prices` (
 
 CREATE TABLE `Dim_Indexes` (
   `index_ID` bigint,
-  `historical_ID` bigint,
   `index_name` varchar(300),
-  `symbol` varchar(10),
-  `exchange` varchar(300),
+  `symbol` varchar(10)
   PRIMARY KEY (`index_ID`)
 );
 
 CREATE TABLE `Dim_Commodites` (
   `commodity_ID` bigint,
   `commodity_name` varchar(30),
-  `symbol` varchar(10),
-  `exchange` varchar(20),
+  `symbol` varchar(10)
   PRIMARY KEY (`commodity_ID`)
 );
 
