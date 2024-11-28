@@ -47,7 +47,7 @@ def upsertTime(connection, csv_row):
     result = rows[0][0]
     return result
 
-def load_bonds(connection, bonds_data_file=BONDS_PATH):
+def load_bond_facts(connection, bonds_data_file=BONDS_PATH):
     """
     ETL function for treasury bond data.
     loads csv data and inserts into Fact_Bond_Prices
@@ -139,25 +139,106 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
             traceback.print_exc()
     connection.commit()
 
-
-def load_stocks(connection, stock_data_file=STOCKS_PATH):
+def load_stock_dim(connection, stock_dim_data_file):
     """
-    ETL function for Stock data.
-    Loads CSV data and inserts into 'Fact_Stock_Prices'
-    Also populates Dim_Time and Dim_company_statements as needed
+    ETL function for Stock Dim data.
     """
 
     connection.rollback()
 
-    fields = ['id', 'companyName', 'symbol', 'company_id', 'date', 'open', 'high', 'low', 'close', 'adjClose', 'volume', 'unadjustedVolume', 'change', 'changePercentage', 'vwap', 'changeOverTime']
+    fields = [ "company_id", "price", "beta", "volumeAvg", "mktCap", "lastDiv", "changes", "currency", "cik", "isin", "cusip", "exchangeFullName", "exchange", "industry", "ceo", "sector", "country", "fullTimeEmployees", "phone", "address", "city", "state", "zip", "dcfDiff", "dcf", "ipoDate", "isEtf", "isActivelyTrading", "isAdr", "isFund" ]
+
+    data_frame = pd.read_csv(stock_dim_data_file, skipinitialspace=True, usecols=fields)
+    
+    for index, row in data_frame.iterrows():
+        try:
+            row_dict = row.to_dict()
+            rid = row_dict.company_id
+
+            dim_row_exists_qs  = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
+            res = connection.execute(dim_row_exists_qs, {'id': rid})
+            rows = res.fetchall()
+            if len(rows) > 1:
+                raise Exception('Ambigious row selection in company statements dimension table')
+            if len(rows) == 1:
+                print('Row already exists in dim table')
+                continue
+
+            # Transform CSV fields to database fields
+            db_row = {
+                'company_id': rid,
+                'price': row_dict['price'], 
+                'beta': row_dict['beta'], 
+                'volumeAvg': row_dict['volumeAvg'], 
+                'mktCap': row_dict['mktCap'], 
+                'lastDiv': row_dict['lastDiv'],
+                'changes': row_dict['changes'],
+                'currency': row_dict['currency'],
+                'cik': row_dict['cik'], 
+                'isin': row_dict['isin'],
+                'cusip': row_dict['cusip'],
+                'exchangeFullName': row_dict['exchangeFullName'],
+                'exchange': row_dict['exchange'], 
+                'industry': row_dict['industry'],
+                'ceo': row_dict['ceo'], 
+                'sector': row_dict['sector'],
+                'country': row_dict['country'],
+                'fullTimeEmployees': row_dict['fullTimeEmployees'], 
+                'phone': row_dict['phone'],
+                'address': row_dict['address'], 
+                'city': row_dict['city'], 
+                'state': row_dict['state'], 
+                'zip': row_dict['zip'], 
+                'dcfDiff': row_dict['dcfDiff'],
+                'dcf': row_dict['dcf'], 
+                'ipoDate': row_dict['ipoDate'],
+                'isEtf': row_dict['isEtf'],
+                'isActivelyTrading': row_dict['isActivelyTrading'], 
+                'isAdr': row_dict['isAdr'], 
+                'isFund': row_dict['isFund'],
+            }
+
+            # Prepare fact table insertion
+            dim_insert = db.text("""
+                                    INSERT INTO Dim_company_statements (
+                                        company_id, price, beta, volumeAvg, mktCap, lastDiv, changes, currency, cik, isin, 
+                                        cusip, exchangeFullName, exchange, industry, ceo, sector, country, fullTimeEmployees, 
+                                        phone, address, city, state, zip, dcfDiff, dcf, ipoDate, isEtf, isActivelyTrading, 
+                                        isAdr, isFund
+                                    ) VALUES (
+                                        :company_id, :price, :beta, :volumeAvg, :mktCap, :lastDiv, :changes, :currency, :cik, :isin, 
+                                        :cusip, :exchangeFullName, :exchange, :industry, :ceo, :sector, :country, :fullTimeEmployees, 
+                                        :phone, :address, :city, :state, :zip, :dcfDiff, :dcf, :ipoDate, :isEtf, :isActivelyTrading, 
+                                        :isAdr, :isFund
+                                    )
+                                """)
+            
+            # Execute the insertion
+            connection.execute(dim_insert, db_row)
+        except Exception as e:
+            print("Error when inserting stocks:", e)
+            traceback.print_exc()
+
+    connection.commit()
+
+
+
+def load_stock_facts(connection, stock_data_file=STOCKS_PATH):
+    """
+    ETL function for Stock data.
+    Loads CSV data and inserts into 'Fact_Stock_Prices'
+    """
+
+    connection.rollback()
+
+    fields = ["company_id", "date", "open", "high", "low", "close", "adjClose", "volume", "unadjustedVolume", "change", "changePercentage", "vwap", "changeOverTime"]
 
     data_frame = pd.read_csv(stock_data_file, skipinitialspace=True, usecols=fields)
     
     for index, row in data_frame.iterrows():
         try:
             row_dict = row.to_dict()
-            rid = row_dict.id
-            print('Processing row:', row_dict)
+            rid = row_dict.company_id
 
             dim_time_id = upsertTime(connection, row_dict)
             dim_row_exists_qs  = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
@@ -265,9 +346,9 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            load_bonds(connection, './data/bond_values.csv')
+            #load_bond_facts(connection, './data/bond_values.csv')
             #load_commodities(connection)
-            #load_stocks(connection)
+            load_stock_facts(connection)
             #load_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
