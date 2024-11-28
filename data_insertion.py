@@ -147,7 +147,7 @@ def load_fact_commodities(connection, commodity_data_file=COMMODITIES_PATH):
             # insert fact data
             fact_insert = db.text("""
                 INSERT INTO Fact_Commodity_Prices (time_id, commodity_id, open, high, low, close, adjClose, volume, 
-                unadjusted_volume, change, change_percentage, vwap, change_over_time) 
+                unadjusted_volume, `change`, change_percentage, vwap, change_over_time) 
                 VALUES (:time_id, :commodity_id, :open, :high, :low, :close, :adjClose, :volume, :unadjustedVolume, 
                 :change, :changePercentage, :vwap, :changeOverTime)
             """)
