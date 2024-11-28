@@ -10,7 +10,8 @@ import pandas as pd
 
 # GLOBALS
 BONDS_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/Bonds-data.csv'
-COMMODITIES_PATH = 'data/Commodities_data.csv'
+COMMODITIES_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/historical_commodity_values.csv'
+COMMODITIES_DIM_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/commodities.csv'
 STOCKS_PATH = 'data/Stocks_data.csv'
 INDEXES_PATH = 'data/Indexes_data.csv'
 # Replace username, password, host, dbname with credentials
@@ -96,12 +97,37 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
             traceback.print_exc()
     connection.commit()
 
-# load_bonds(connection)
-def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
+
+def load_dim_commodities(connection, commodity_dim_file = COMMODITIES_DIM_PATH):
     """
-    ETL function for commodity data.
+    ETL function for commodity dimension data
+    """
+    # Specify required fields
+    fields = ['id', 'commodityName', 'symbol']
+    # read into csv with pandas
+    dim_data = pd.read_csv(commodity_dim_file, delimiter=';', usecols=fields)
+
+    for index, row in dim_data.iterrows():
+        row_dict = row.to_dict()
+        # Insert commodity into dim_commodities (if doesnt exist)
+        select_query = db.text("SELECT commodity_id FROM Dim_Commodities WHERE commodity_id = :commodity_id")
+        result = connection.execute(select_query, {'commodity_id': row_dict['id']}).fetchone()
+
+        if not result:
+            dim_insert = db.text("""
+                            INSERT INTO Dim_Commodities (commodity_id, commodity_name, symbol) 
+                            VALUES (:id, :commodityName, :symbol)
+                        """)
+            connection.execute(dim_insert, row_dict)
+    connection.commit()
+
+
+
+def load_fact_commodities(connection, commodity_data_file=COMMODITIES_PATH):
+    """
+    ETL function for commodity fact data.
     Loads CSV data and inserts into 'Fact_Commodity_Prices'
-    Also populates Dim_Time and Dim_Commodities as needed
+    Also populates Dim_Time
     """
     # Reset any existing transactions to start fresh
     connection.rollback()
@@ -115,16 +141,6 @@ def load_commodities(connection, commodity_data_file=COMMODITIES_PATH):
             print('Processing row:', row_dict)
             # Retrieve time_id
             dim_time_id = upsertTime(connection, row_dict)
-            # Insert commodity into dim_commodities (if doesnt exist)
-            select_query = db.text("SELECT commodity_id FROM Dim_Commodities WHERE commodity_id = :commodity_id")
-            result = connection.execute(select_query, {'commodity_id': row_dict['commodity_id']}).fetchone()
-
-            if not result:
-                dim_insert = db.text("""
-                    INSERT INTO Dim_Commodities (commodity_id, commodity_name, commodity_symbol) 
-                    VALUES (:commodity_id, :commodityName, :symbol)
-                """)
-                connection.execute(dim_insert, row_dict)
 
             # insert fact data
             # TODO: The CSV data we are using seems wrong. Waiting on Ajitesh to send current data files, then fix this
@@ -265,8 +281,9 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            load_bonds(connection, './data/bond_values.csv')
-            #load_commodities(connection)
+            #load_bonds(connection, './data/bond_values.csv')
+            load_dim_commodities(connection)
+            #load_fact_commodities(connection)
             #load_stocks(connection)
             #load_indexes(connection)
     except Exception as e:
