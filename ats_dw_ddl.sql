@@ -91,6 +91,9 @@ CREATE TABLE `Dim_company_statements` (
   `company_name` varchar(300),
   `symbol` varchar(10),
   `currency` varchar(10),
+  `beta` float,
+  `volAvg` float,
+  `mktCap` bigint,
   `cik` varchar(16),
   `isin` varchar(16),
   `cusip` varchar(16),
@@ -108,6 +111,8 @@ CREATE TABLE `Dim_company_statements` (
   `zip` varchar(10),
   `ipoDate` date,
   `isEtf` bool,
+  `dcfDiff` float,
+  `dcf` float,
   `isActivelyTrading` bool,
   `isFund` bool,
   PRIMARY KEY (`company_id`)
@@ -117,9 +122,6 @@ CREATE TABLE `Fact_Stock_Prices` (
   `fact_id` int auto_increment,
   `time_id` int,
   `company_id` bigint,
-  `beta` float,
-  `volAvg` float,
-  `mktCap` bigint,
   `lastDiv` float,
   `open` float,
   `high` float,
@@ -132,8 +134,6 @@ CREATE TABLE `Fact_Stock_Prices` (
   `change_percent` float,
   `vwap` float,
   `change_over_time` float,
-  `dcfDiff` float,
-  `dcf` float,
   PRIMARY KEY (`fact_id`),
   FOREIGN KEY (`company_id`) REFERENCES `Dim_company_statements`(`company_id`)
 );

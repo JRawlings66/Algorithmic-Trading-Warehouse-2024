@@ -261,8 +261,8 @@ def load_stock_facts(connection, stock_data_file=STOCKS_PATH):
                 'change_percent': row_dict['changePercentage'],
                 'adjClose': row_dict['price'],  # Using price as adjClose since we don't have it
                 'unadjustedVolume': row_dict['volume'],  # Using regular volume as we don't have unadjusted
-                'vwap': None,
-                'changeOverTime': None 
+                'vwap': row_dict['vwap'],
+                'changeOverTime': row_dict['changeOverTime']
             }
 
             # Prepare fact table insertion
@@ -348,7 +348,8 @@ if __name__ == "__main__":
         with engine.connect() as connection:
             #load_bond_facts(connection, './data/bond_values.csv')
             #load_commodities(connection)
-            load_stock_facts(connection)
+            load_stock_dim(connection, './data/company_statements.csv')
+            load_stock_facts(connection, './data/historical_stock_values.csv')
             #load_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
