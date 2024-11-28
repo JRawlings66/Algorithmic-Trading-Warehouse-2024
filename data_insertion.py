@@ -1,3 +1,4 @@
+import sys
 import traceback
 import sqlalchemy as db
 import csv
@@ -43,7 +44,7 @@ def upsertTime(connection, csv_row):
     if len(rows) > 1:
         raise Exception("Ambigious Row selection")
 
-    result = rows[0]
+    result = rows[0][0]
     return result
 
 def load_bonds(connection, bonds_data_file=BONDS_PATH):
@@ -55,28 +56,41 @@ def load_bonds(connection, bonds_data_file=BONDS_PATH):
     # Reset any existing transactions to start fresh
     connection.rollback()
     # Define the fields we’re pulling from the CSV
-    fields = ['id', 'treasuryName', 'bond_id', 'date', '1_month', '2_month', '3_month', '6_month', '1_year',
+    fields = ['bond_id', 'date', '1_month', '2_month', '3_month', '6_month', '1_year',
                   '2_year', '3_year', '5_year', '7_year', '10_year', '20_year', '30_year']
-    data_frame = pd.read_csv(bonds_data_file, skipinitialspace=True, usecols=fields)
+    data_frame = pd.read_csv(bonds_data_file, sep=';', skipinitialspace=True, usecols=fields)
     for index, row in data_frame.iterrows():
         try:
             # Convert row to a dictionary (this will map column names to values)
             row_dict = row.to_dict()
             # Insert date into dim_time
             dim_time_id = upsertTime(connection, row_dict)
-            dim_insert = db.text("""
-                INSERT INTO Dim_bonds (bond_ID, treasury_name) VALUES (:id, :treasuryName)
-            """)
-            connection.execute(dim_insert, row_dict)
+
+            # Transform CSV fields to database fields
+            db_row = {
+                'time_id': int(dim_time_id),
+                'bond_id': row_dict['bond_id'],
+                'one_month': row_dict['1_month'],
+                'two_month': row_dict['2_month'],
+                'three_month': row_dict['3_month'],
+                'six_month': row_dict['6_month'],
+                'one_year': row_dict['1_year'],
+                'two_year': row_dict['2_year'],
+                'three_year': row_dict['3_year'],
+                'five_year': row_dict['5_year'],
+                'ten_year': row_dict['10_year'],
+                'twenty_year': row_dict['20_year'],
+                'thirty_year': row_dict['30_year']
+            }
+
             # Insert data into fact_bond_prices
             fact_insert = db.text("""
                 INSERT INTO Fact_Bond_Prices (time_id, bond_id, one_month, two_month, three_month, six_month, one_year, 
                 two_year, three_year, five_year, ten_year, twenty_year, thirty_year)
-                VALUES (:time_id, :id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
+                VALUES (:time_id, :bond_id, :one_month, :two_month, :three_month, :six_month, :one_year, :two_year, 
                 :three_year, :five_year, :ten_year, :twenty_year, :thirty_year)
             """)
-            row_dict.update({ "time_id": dim_time_id})
-            connection.execute(fact_insert, row_dict)
+            connection.execute(fact_insert, db_row)
         except Exception as e:
             print("Error when inserting bonds:", e)
             traceback.print_exc()
@@ -251,10 +265,10 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            load_bonds(connection)
-            load_commodities(connection)
-            # load_stocks(connection)
-            # load_indexes(connection)
+            load_bonds(connection, './data/bond_values.csv')
+            #load_commodities(connection)
+            #load_stocks(connection)
+            #load_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
         traceback.print_exc()
