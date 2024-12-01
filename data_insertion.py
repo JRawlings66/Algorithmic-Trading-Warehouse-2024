@@ -158,27 +158,42 @@ def load_fact_commodities(connection, commodity_data_file=COMMODITIES_PATH):
             traceback.print_exc()
     connection.commit()
 
-def load_stock_dim(connection, stock_dim_data_file):
+def load_stock_dim(connection, stock_dim_data_statements, stock_dim_data_companies):
     """
     ETL function for Stock Dim data.
     """
-
+    # Rollback any previous transactions
     connection.rollback()
+    # Fields from company_statements.csv to extract
+    company_statements_fields = [ "company_id", "currency", "cik", "isin", "cusip", "exchangeFullName", "exchange", "industry", "ceo",
+               "sector", "country", "fullTimeEmployees", "phone", "address", "city", "state", "zip", "ipoDate", "isEtf",
+               "isActivelyTrading", "isFund"]
 
-    fields = [ "company_id", "currency", "cik", "isin", "cusip", "exchangeFullName", "exchange", "industry", "ceo", "sector", "country", "fullTimeEmployees", "phone", "address", "city", "state", "zip", "ipoDate", "isEtf", "isActivelyTrading", "isFund" ]
+    # Load data from company_statements.csv and companies.csv
+    company_statements_data_frame = pd.read_csv(stock_dim_data_statements, skipinitialspace=True, usecols=company_statements_fields)
 
-    data_frame = pd.read_csv(stock_dim_data_file, skipinitialspace=True, usecols=fields)
-    
-    for index, row in data_frame.iterrows():
+    companies_data_frame = pd.read_csv(stock_dim_data_companies, delimiter=';', skipinitialspace=True, usecols=["id", "companyName", "symbol"])
+
+    # Merge the data frames on company_id
+    merged_frame = pd.merge(
+        company_statements_data_frame,
+        companies_data_frame,
+        left_on="company_id",
+        right_on="id",
+        how="inner"
+    )
+
+    for index, row in merged_frame.iterrows():
         try:
             row_dict = row.to_dict()
-            rid = row_dict.company_id
+            rid = row_dict["company_id"]
 
-            dim_row_exists_qs  = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
+            # check if the row already exists
+            dim_row_exists_qs = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
             res = connection.execute(dim_row_exists_qs, {'id': rid})
             rows = res.fetchall()
             if len(rows) > 1:
-                raise Exception('Ambigious row selection in company statements dimension table')
+                raise Exception('Ambiguous row selection in company statements dimension table')
             if len(rows) == 1:
                 print('Row already exists in dim table')
                 continue
@@ -186,6 +201,8 @@ def load_stock_dim(connection, stock_dim_data_file):
             # Transform CSV fields to database fields
             db_row = {
                 'company_id': rid,
+                'company_name': row_dict['companyName'],
+                'symbol': row_dict['symbol'],
                 'currency': row_dict['currency'],
                 'cik': row_dict['cik'], 
                 'isin': row_dict['isin'],
@@ -209,17 +226,18 @@ def load_stock_dim(connection, stock_dim_data_file):
             }
 
             # Prepare fact table insertion
+            # noinspection SqlNoDataSourceInspection
             dim_insert = db.text("""
-                                    INSERT INTO Dim_company_statements (
-                                        company_id, currency, cik, isin, cusip, exchangeFullName, exchange, industry, 
-                                        ceo, sector, country, fullTimeEmployees, phone, address, city, state, zip,
-                                         ipoDate, isEtf, isActivelyTrading, isFund
-                                    ) VALUES (
-                                        :company_id, :currency, :cik, :isin, :cusip, :exchangeFullName, :exchange, 
-                                        :industry, :ceo, :sector, :country, :fullTimeEmployees, :phone, :address, :city, 
-                                        :state, :zip, :ipoDate, :isEtf, :isActivelyTrading, :isFund
-                                    )
-                                """)
+                INSERT INTO Dim_company_statements (
+                    company_id, currency, cik, isin, cusip, exchangeFullName, exchange, industry, 
+                    ceo, sector, country, fullTimeEmployees, phone, address, city, state, zip,
+                    ipoDate, isEtf, isActivelyTrading, isFund
+                ) VALUES (
+                    :company_id, :currency, :cik, :isin, :cusip, :exchangeFullName, :exchange, 
+                    :industry, :ceo, :sector, :country, :fullTimeEmployees, :phone, :address, :city, 
+                    :state, :zip, :ipoDate, :isEtf, :isActivelyTrading, :isFund
+                )
+            """)
             
             # Execute the insertion
             connection.execute(dim_insert, db_row)
