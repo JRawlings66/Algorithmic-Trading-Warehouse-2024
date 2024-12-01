@@ -322,36 +322,37 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
     for index, row in data_frame.iterrows():
         try:
             row_dict = row.to_dict()
-            rid = row_dict.id
+            rid = row_dict['id']
             print('Processing row:', row_dict)
-            dim_time_id = upsertTime(connection, row_dict)
             dim_row_exists_qs  = db.text("SELECT * FROM Dim_Indexes WHERE index_ID = :id")
             res = connection.execute(dim_row_exists_qs, {'id': rid})
-            
-            if not res:                
-                # Prepare fact table insertion
-                fact_insert = db.text("""
-                    INSERT INTO Dim_Indexes (index_ID, index_name, symbol) 
-                                        VALUES (:id, :indexName, :symbol)
-                """)
-                db_row = {
-                    #'time_id': dim_time_id,
-                    'id': rid,
-                    'indexName': row_dict.indexName,
-                    'symbol': row_dict.symbol,
-                }
-            elif len(res) > 1:
+            rows = res.fetchall()
+
+            if len(rows) > 1:
                 raise Exception('Ambiguous row selection in dim_indexes')
-            else:
-                print("Row already exists.")
-            
+            if len(rows) == 1:
+                raise Exception('Row already exists in dim table')
+
+            # Transform csv fields into database fields
+            db_row = {
+                'id': rid,
+                'indexName': row_dict['indexName'],
+                'symbol': row_dict['symbol']
+            }
+            # Prepare fact table insertion
+            dim_insert = db.text("""
+                INSERT INTO Dim_Indexes (
+                    index_ID, index_name, symbol
+                ) VALUES (
+                    :id, :indexName, :symbol
+                )
+            """)
+
             # Execute the insertion
-            connection.execute(fact_insert, db_row)
-            
+            connection.execute(dim_insert, db_row)
         except Exception as e:
             print("Error when inserting index data:", e)
             traceback.print_exc()
-
     connection.commit()
 
 
