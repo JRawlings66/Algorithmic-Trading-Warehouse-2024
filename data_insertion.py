@@ -290,7 +290,7 @@ def load_stock_facts(connection, stock_data_file=STOCKS_PATH):
     connection.commit()
 
 
-def load_dim_indexs(connection, indexes_data_file=INDEXES_PATH):
+def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
     connection.rollback()
     fields = ['id', 'indexName', 'symbol']
 
@@ -311,7 +311,17 @@ def load_dim_indexs(connection, indexes_data_file=INDEXES_PATH):
                 fact_insert = db.text("""
                     INSERT INTO Dim_Indexes (index_ID, index_name, symbol) 
                                         VALUES (:id, :indexName, :symbol)
-""")
+                """)
+                db_row = {
+                    #'time_id': dim_time_id
+                    'index_ID': row_dict.id,
+                    'index_name': row_dict.indexName,
+                    'symbol': row_dict.symbol,
+                }
+            elif res > 1:
+                raise Exception('Ambiguous row selection in dim_indexes')
+            else:
+                print("Row already exists.")
             
             # Execute the insertion
             connection.execute(fact_insert, db_row)
