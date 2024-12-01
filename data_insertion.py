@@ -165,7 +165,7 @@ def load_stock_dim(connection, stock_dim_data_file):
 
     connection.rollback()
 
-    fields = [ "company_id", "price", "beta", "volumeAvg", "mktCap", "lastDiv", "changes", "currency", "cik", "isin", "cusip", "exchangeFullName", "exchange", "industry", "ceo", "sector", "country", "fullTimeEmployees", "phone", "address", "city", "state", "zip", "dcfDiff", "dcf", "ipoDate", "isEtf", "isActivelyTrading", "isAdr", "isFund" ]
+    fields = [ "company_id", "currency", "cik", "isin", "cusip", "exchangeFullName", "exchange", "industry", "ceo", "sector", "country", "fullTimeEmployees", "phone", "address", "city", "state", "zip", "ipoDate", "isEtf", "isActivelyTrading", "isFund" ]
 
     data_frame = pd.read_csv(stock_dim_data_file, skipinitialspace=True, usecols=fields)
     
@@ -186,12 +186,6 @@ def load_stock_dim(connection, stock_dim_data_file):
             # Transform CSV fields to database fields
             db_row = {
                 'company_id': rid,
-                'price': row_dict['price'], 
-                'beta': row_dict['beta'], 
-                'volumeAvg': row_dict['volumeAvg'], 
-                'mktCap': row_dict['mktCap'], 
-                'lastDiv': row_dict['lastDiv'],
-                'changes': row_dict['changes'],
                 'currency': row_dict['currency'],
                 'cik': row_dict['cik'], 
                 'isin': row_dict['isin'],
@@ -207,28 +201,23 @@ def load_stock_dim(connection, stock_dim_data_file):
                 'address': row_dict['address'], 
                 'city': row_dict['city'], 
                 'state': row_dict['state'], 
-                'zip': row_dict['zip'], 
-                'dcfDiff': row_dict['dcfDiff'],
-                'dcf': row_dict['dcf'], 
+                'zip': row_dict['zip'],
                 'ipoDate': row_dict['ipoDate'],
                 'isEtf': row_dict['isEtf'],
-                'isActivelyTrading': row_dict['isActivelyTrading'], 
-                'isAdr': row_dict['isAdr'], 
+                'isActivelyTrading': row_dict['isActivelyTrading'],
                 'isFund': row_dict['isFund'],
             }
 
             # Prepare fact table insertion
             dim_insert = db.text("""
                                     INSERT INTO Dim_company_statements (
-                                        company_id, price, beta, volumeAvg, mktCap, lastDiv, changes, currency, cik, isin, 
-                                        cusip, exchangeFullName, exchange, industry, ceo, sector, country, fullTimeEmployees, 
-                                        phone, address, city, state, zip, dcfDiff, dcf, ipoDate, isEtf, isActivelyTrading, 
-                                        isAdr, isFund
+                                        company_id, currency, cik, isin, cusip, exchangeFullName, exchange, industry, 
+                                        ceo, sector, country, fullTimeEmployees, phone, address, city, state, zip,
+                                         ipoDate, isEtf, isActivelyTrading, isFund
                                     ) VALUES (
-                                        :company_id, :price, :beta, :volumeAvg, :mktCap, :lastDiv, :changes, :currency, :cik, :isin, 
-                                        :cusip, :exchangeFullName, :exchange, :industry, :ceo, :sector, :country, :fullTimeEmployees, 
-                                        :phone, :address, :city, :state, :zip, :dcfDiff, :dcf, :ipoDate, :isEtf, :isActivelyTrading, 
-                                        :isAdr, :isFund
+                                        :company_id, :currency, :cik, :isin, :cusip, :exchangeFullName, :exchange, 
+                                        :industry, :ceo, :sector, :country, :fullTimeEmployees, :phone, :address, :city, 
+                                        :state, :zip, :ipoDate, :isEtf, :isActivelyTrading, :isFund
                                     )
                                 """)
             
