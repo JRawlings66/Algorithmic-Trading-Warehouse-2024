@@ -313,8 +313,8 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
                                         VALUES (:id, :indexName, :symbol)
                 """)
                 db_row = {
-                    #'time_id': dim_time_id
-                    'index_ID': row_dict.id,
+                    #'time_id': dim_time_id,
+                    'index_ID': rid,
                     'index_name': row_dict.indexName,
                     'symbol': row_dict.symbol,
                 }
