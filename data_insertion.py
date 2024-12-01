@@ -336,11 +336,11 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
                 """)
                 db_row = {
                     #'time_id': dim_time_id,
-                    'index_ID': rid,
-                    'index_name': row_dict.indexName,
+                    'id': rid,
+                    'indexName': row_dict.indexName,
                     'symbol': row_dict.symbol,
                 }
-            elif res > 1:
+            elif len(res) > 1:
                 raise Exception('Ambiguous row selection in dim_indexes')
             else:
                 print("Row already exists.")
