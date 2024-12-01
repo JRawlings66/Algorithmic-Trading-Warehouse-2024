@@ -333,7 +333,7 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
                 db_row = {
                     #'time_id': dim_time_id,
                     'id': rid,
-                    'index_name': row_dict.indexName,
+                    'indexName': row_dict.indexName,
                     'symbol': row_dict.symbol,
                 }
             elif len(res) > 1:
