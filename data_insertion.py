@@ -316,7 +316,7 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
     connection.rollback()
     fields = ['id', 'indexName', 'symbol']
 
-    data_frame = pd.read_csv(indexes_data_file, skipinitialspace=True, usecols=fields)
+    data_frame = pd.read_csv(indexes_data_file, delimiter=';', skipinitialspace=True, usecols=fields)
 
 
     for index, row in data_frame.iterrows():
@@ -420,12 +420,15 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
+            # FUNCTIONS TESTED AND WORKING:
             # load_dim_commodities(connection)
             # load_fact_commodities(connection)
             # load_bond_facts(connection, './data/bond_values.csv')
-            load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
+            # load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
+            # TO BE TESTED STILL:
             # load_stock_facts(connection, './data/historical_stock_values.csv')
-            #load_indexes(connection)
+            load_dim_indexes(connection, './data/indexes.csv')
+            # load_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
         traceback.print_exc()
