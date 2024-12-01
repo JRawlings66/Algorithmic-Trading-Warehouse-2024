@@ -13,7 +13,7 @@ BONDS_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/dat
 COMMODITIES_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/historical_commodity_values.csv'
 COMMODITIES_DIM_PATH = '/home/admin/PycharmProjects/Algorithmic-Trading-Warehouse-2024/data/commodities.csv'
 STOCKS_PATH = 'data/Stocks_data.csv'
-INDEXES_PATH = 'data/Indexes_data.csv'
+INDEXES_PATH = 'data/historical_index_values.csv'
 # Replace username, password, host, dbname with credentials
 DATABASE_URI = 'mysql+pymysql://root:FIREWOOD-sack-wino@localhost:3306/ats_dw'
 
@@ -253,22 +253,43 @@ def load_stock_dim(connection, stock_dim_data_statements, stock_dim_data_compani
 
 
 
-def load_stock_facts(connection, stock_data_file=STOCKS_PATH):
+def load_stock_facts(connection,company_data_file, stock_data_file=STOCKS_PATH):
     """
     ETL function for Stock data.
     Loads CSV data and inserts into 'Fact_Stock_Prices'
     """
+    company_feilds = ['company_id',
+                      'beta',
+                      'volumeAvg',
+                      'mktCap',
+                      'lastDiv',
+                      'dcfDiff',
+                      'dcf']
+
 
     connection.rollback()
 
     fields = ["company_id", "date", "open", "high", "low", "close", "adjClose", "volume", "unadjustedVolume", "change", "changePercentage", "vwap", "changeOverTime"]
+    # TODO
+    # Make sure to remove and or change nrows depending on how much you want to insert
+    stock_dataFrame = pd.read_csv(stock_data_file, skipinitialspace=True, delimiter=';', usecols=fields, nrows=100)
+    company_dataFrame = pd.read_csv(company_data_file, skipinitialspace=True, delimiter=';', usecols=company_feilds, nrows=100)
 
-    data_frame = pd.read_csv(stock_data_file, skipinitialspace=True, usecols=fields)
+
+    mergedDataframe = pd.merge(
+        stock_dataFrame,
+        company_dataFrame,
+        left_on = "company_id",
+        right_on = 'company_id',
+        how = "inner"
+    )
+
+
     
-    for index, row in data_frame.iterrows():
+    for index, row in mergedDataframe.iterrows():
         try:
             row_dict = row.to_dict()
-            rid = row_dict.company_id
+            rid = row_dict['company_id']
 
             dim_time_id = upsertTime(connection, row_dict)
             dim_row_exists_qs  = db.text("SELECT * FROM Dim_company_statements WHERE company_id = :id")
@@ -284,24 +305,34 @@ def load_stock_facts(connection, stock_data_file=STOCKS_PATH):
                 'time_id': dim_time_id,
                 'company_id': rid,
                 'open': row_dict['open'],
-                'high': row_dict['dayHigh'],
-                'low': row_dict['dayLow'],
-                'close': row_dict['price'],  # Using current price as close
+                'high': row_dict['high'],
+                'low': row_dict['low'],
+                'close': row_dict['close'],  # Using current price as close
+                'adjClose': row_dict['adjClose'],  # Using price as adjClose since we don't have it
                 'volume': row_dict['volume'],
+                'change': row_dict['change'],
+                'unadjustedVolume': row_dict['unadjustedVolume'],  # Using regular volume as we don't have unadjusted
                 'change_percent': row_dict['changePercentage'],
-                'adjClose': row_dict['price'],  # Using price as adjClose since we don't have it
-                'unadjustedVolume': row_dict['volume'],  # Using regular volume as we don't have unadjusted
                 'vwap': row_dict['vwap'],
-                'changeOverTime': row_dict['changeOverTime']
+                'changeOverTime': row_dict['changeOverTime'],
+                # This is where the compnay data is coming from
+                'beta': row_dict['beta'],
+                'volAvg': row_dict['volumeAvg'],
+                'mktCap': row_dict['mktCap'],  # Using regular volume as we don't have unadjusted
+                'lastDiv': row_dict['lastDiv'],
+                'dcfDiff': row_dict['dcfDiff'],
+                'dcf': row_dict['dcf']
             }
 
+            dim_time_id = upsertTime(connection,row_dict)
             # Prepare fact table insertion
             fact_insert = db.text("""
-                INSERT INTO Fact_Stock_Prices (time_id, company_id, open, high, low, close, adj_close, volume, change_percent, vwap) VALUES (
-                    :time_id, :company_id, :open, :high, :low, :close,
-                    :adjClose, :volume, :change_percent, :vwap
-                )
+                INSERT INTO Fact_Stock_Prices (time_id, company_id, open, high, low, close, adj_close, volume, `change`,
+                 unadjusted_volume, change_percent, vwap, change_over_time,
+                 beta, volAvg, mktCap, lastDiv, dcfDiff, dcf) 
+                VALUES (:time_id,:company_id, :open, :high, :low, :close, :adjClose, :volume, :change, :unadjustedVolume, :change_percent, :vwap, :changeOverTime, :beta, :volAvg, :mktCap, :lastDiv, :dcfDiff, :dcf)
             """)
+            row_dict.update({"time_id": dim_time_id})
             
             # Execute the insertion
             connection.execute(fact_insert, db_row)
@@ -358,23 +389,22 @@ def load_dim_indexes(connection, indexes_data_file=INDEXES_PATH):
 
 
 
-def load_indexes(connection, indexes_data_file=INDEXES_PATH):
+def load_fact_indexes(connection, indexes_data_file=INDEXES_PATH):
     """
     ETL function for index data.
     Loads CSV data and inserts into Fact_Index_Prices
     Maps fields from CSV format to database schema.
     """
     connection.rollback()
-    fields = ['index_id', 'open', 'high', 'low', 'close', 'adjClose', 'volume',
+    fields = ['index_id','date', 'open', 'high', 'low', 'close', 'adjClose', 'volume',
                'unadjustedVolume', 'change', 'changePercentage', 'vwap', 'changeOverTime']
     
-    data_frame = pd.read_csv(indexes_data_file, skipinitialspace=True, usecols=fields)
+    data_frame = pd.read_csv(indexes_data_file, delimiter=";", skipinitialspace=True, usecols=fields)
     
     for index, row in data_frame.iterrows():
         try:
             # Convert row to a dictionary
             row_dict = row.to_dict()
-            print('Processing row:', row_dict)
             
             dim_time_id = upsertTime(connection, row_dict)
             
@@ -391,15 +421,16 @@ def load_indexes(connection, indexes_data_file=INDEXES_PATH):
                 'unadjustedVolume': row_dict['unadjustedVolume'],
                 'change': row_dict['change'],
                 'change_percent': row_dict['changePercentage'],
-                'vwap': None, 
-                'changeOverTime': None 
+                'vwap': row_dict['vwap'],
+                'changeOverTime': row_dict['changeOverTime']
             }
+            row_dict.update({"time_id": dim_time_id})
             
             # Prepare fact table insertion
             fact_insert = db.text("""
                 INSERT INTO Fact_Index_Prices (
                     index_id, time_id,  open, high, low, close,
-                    adjClose, volume, unadjustedVolume, change, change_percent
+                    adjClose, volume, unadjustedVolume, `change`, change_percent,
                     vwap, changeOverTime
                 ) VALUES (
                     :index_id, :time_id, :open, :high, :low, :close,
@@ -407,6 +438,7 @@ def load_indexes(connection, indexes_data_file=INDEXES_PATH):
                     :change_percent, :vwap, :changeOverTime
                 )
             """)
+
             
             # Execute the insertion
             connection.execute(fact_insert, db_row)
@@ -421,13 +453,13 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            load_dim_commodities(connection)
-            load_fact_commodities(connection)
-            load_bond_facts(connection, './data/bond_values.csv')
-            load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
-            # load_stock_facts(connection, './data/historical_stock_values.csv')
-            load_dim_indexes(connection, './data/indexes.csv')
-            # load_indexes(connection)
+            # load_dim_commodities(connection)
+            # load_fact_commodities(connection)
+            # load_bond_facts(connection, './data/bond_values.csv')
+            # load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
+            # load_stock_facts(connection, './data/company_statements.csv', './data/historical_stock_values.csv',)
+            # load_dim_indexes(connection, './data/indexes.csv')
+            load_fact_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
         traceback.print_exc()
