@@ -421,12 +421,10 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            # FUNCTIONS TESTED AND WORKING:
-            # load_dim_commodities(connection)
-            # load_fact_commodities(connection)
-            # load_bond_facts(connection, './data/bond_values.csv')
-            # load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
-            # TO BE TESTED STILL:
+            load_dim_commodities(connection)
+            load_fact_commodities(connection)
+            load_bond_facts(connection, './data/bond_values.csv')
+            load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
             # load_stock_facts(connection, './data/historical_stock_values.csv')
             load_dim_indexes(connection, './data/indexes.csv')
             # load_indexes(connection)
