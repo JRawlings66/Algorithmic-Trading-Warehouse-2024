@@ -104,7 +104,7 @@ CREATE TABLE `Dim_company_statements` (
   `sector` varchar(300),
   `country` varchar(300),
   `fullTimeEmployees` bigint,
-  `phone` integer,
+  `phone` varchar(20),
   `address` varchar(100),
   `city` varchar(100),
   `state` varchar(30),

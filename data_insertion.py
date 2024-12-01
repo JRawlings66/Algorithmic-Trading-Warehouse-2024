@@ -170,7 +170,7 @@ def load_stock_dim(connection, stock_dim_data_statements, stock_dim_data_compani
                "isActivelyTrading", "isFund"]
 
     # Load data from company_statements.csv and companies.csv
-    company_statements_data_frame = pd.read_csv(stock_dim_data_statements, skipinitialspace=True, usecols=company_statements_fields)
+    company_statements_data_frame = pd.read_csv(stock_dim_data_statements, delimiter=';', skipinitialspace=True, usecols=company_statements_fields)
 
     companies_data_frame = pd.read_csv(stock_dim_data_companies, delimiter=';', skipinitialspace=True, usecols=["id", "companyName", "symbol"])
 
@@ -186,6 +186,10 @@ def load_stock_dim(connection, stock_dim_data_statements, stock_dim_data_compani
     for index, row in merged_frame.iterrows():
         try:
             row_dict = row.to_dict()
+            # Check first for any NaN Values, replace with 'None' for MySQL
+            for key, value in row_dict.items():
+                if pd.isna(value):
+                    row_dict[key] = None
             rid = row_dict["company_id"]
 
             # check if the row already exists
@@ -229,11 +233,11 @@ def load_stock_dim(connection, stock_dim_data_statements, stock_dim_data_compani
             # noinspection SqlNoDataSourceInspection
             dim_insert = db.text("""
                 INSERT INTO Dim_company_statements (
-                    company_id, currency, cik, isin, cusip, exchangeFullName, exchange, industry, 
+                    company_id, company_name, symbol, currency, cik, isin, cusip, exchangeFullName, exchange, industry, 
                     ceo, sector, country, fullTimeEmployees, phone, address, city, state, zip,
                     ipoDate, isEtf, isActivelyTrading, isFund
                 ) VALUES (
-                    :company_id, :currency, :cik, :isin, :cusip, :exchangeFullName, :exchange, 
+                    :company_id, :company_name, :symbol, :currency, :cik, :isin, :cusip, :exchangeFullName, :exchange, 
                     :industry, :ceo, :sector, :country, :fullTimeEmployees, :phone, :address, :city, 
                     :state, :zip, :ipoDate, :isEtf, :isActivelyTrading, :isFund
                 )
@@ -416,11 +420,11 @@ if __name__ == "__main__":
     try:
         # Establish connection to db
         with engine.connect() as connection:
-            load_dim_commodities(connection)
-            load_fact_commodities(connection)
-            load_bond_facts(connection, './data/bond_values.csv')
-            load_stock_dim(connection, './data/company_statements.csv')
-            load_stock_facts(connection, './data/historical_stock_values.csv')
+            # load_dim_commodities(connection)
+            # load_fact_commodities(connection)
+            # load_bond_facts(connection, './data/bond_values.csv')
+            load_stock_dim(connection, './data/company_statements.csv', './data/companies.csv')
+            # load_stock_facts(connection, './data/historical_stock_values.csv')
             #load_indexes(connection)
     except Exception as e:
         print("Error in database connection or data loading:", e)
